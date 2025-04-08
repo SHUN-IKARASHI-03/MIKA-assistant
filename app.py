@@ -31,7 +31,7 @@ def slack_events():
             text = event["text"]
             channel = event["channel"]
 
-            prompt = text.replace(f"<@{event['bot_id']}>", "").strip()
+            prompt = text.strip()
 
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
