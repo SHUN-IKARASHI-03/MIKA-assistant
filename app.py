@@ -39,7 +39,7 @@ def slack_events():
 
             # ChatGPTへ送信
             chat_completion = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": "あなたは優しくて賢い社内アシスタント『ミカさん』です。"},
                     {"role": "user", "content": text},
