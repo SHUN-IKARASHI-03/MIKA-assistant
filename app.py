@@ -19,6 +19,11 @@ def slack_events():
         return "Invalid request", 403
 
     payload = request.json
+
+        # SlackのURL確認用 challenge 応答
+    if "type" in payload and payload["type"] == "url_verification":
+        return jsonify({"challenge": payload["challenge"]})
+        
     if "event" in payload:
         event = payload["event"]
         if event.get("type") == "app_mention":
