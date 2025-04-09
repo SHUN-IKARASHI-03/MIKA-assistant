@@ -25,7 +25,7 @@ def save_to_supabase(data):
     SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaGhxb2d4bGN6bHhyZHByeWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNjQxMDgsImV4cCI6MjA1OTc0MDEwOH0.Hbb0yPOMKY3sDgWLhoJOy2QR5zCnw1ozRQCXDSd3hmA"            # ← あなたのanonキーに変更
     table_name = "messages"
 
-       headers = {
+    headers = {
         "apikey": SUPABASE_API_KEY,
         "Authorization": f"Bearer {SUPABASE_API_KEY}",
         "Content-Type": "application/json"
