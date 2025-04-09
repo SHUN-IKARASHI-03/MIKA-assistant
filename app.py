@@ -86,7 +86,7 @@ def slack_events():
         supabase.table("messages_all").insert(data).execute()
         print(f"[✅ LOGGED] {user_id} @ {channel} → '{text}'")
 
-　　　　# ✅ 現在の日時を「その都度」取得
+        # ✅ 現在の日時を「その都度」取得
         now = (datetime.utcnow() + timedelta(hours=9)).strftime("%Y-%m-%d %H:%M:%S JST")
         
         # ChatGPT に問い合わせて返信生成
