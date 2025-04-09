@@ -21,8 +21,8 @@ signature_verifier = SignatureVerifier(signing_secret=os.getenv("SLACK_SIGNING_S
 
 # Supabaseへの保存関数
 def save_to_supabase(data):
-    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"
-    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"  # あなたのURL
+    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")           # .envから読み込む方式推奨
     table_name = "messages"
 
     headers = {
@@ -38,7 +38,7 @@ def save_to_supabase(data):
         "timestamp": data["timestamp"],
         "user_id": data["user_id"],
         "is_important": data.get("is_important", False),
-        "context_id": data.get("context_id", None)
+        "context_id": data.get("context_id", "")
     }
 
     print("📤 Sending to Supabase:", payload)
@@ -50,13 +50,14 @@ def save_to_supabase(data):
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     print("🎯 Slackイベント受信！")
-    # リクエストの署名検証
+
+    # リクエスト署名を検証
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
         return "Invalid request", 403
 
     payload = request.json
 
-    # URL検証（最初のみ必要）
+    # Slackの初回検証用
     if payload.get("type") == "url_verification":
         return jsonify({"challenge": payload["challenge"]})
 
@@ -65,13 +66,18 @@ def slack_events():
         event = payload["event"]
         print("✅ Slack event received:", event)
 
-        # UNIX timestamp → ISO形式に変換
+        # Bot自身の発言なら無視（ループ対策）
+        if "bot_id" in event:
+            return "Ignore bot message", 200
+
+        # タイムスタンプをISO形式に変換
         try:
             ts_float = float(event.get("ts", ""))
             iso_timestamp = datetime.utcfromtimestamp(ts_float).isoformat()
         except:
             iso_timestamp = None
 
+        # Supabaseに保存するデータ
         data_to_save = {
             "user_name": event.get("user", "unknown"),
             "text": event.get("text", ""),
@@ -79,13 +85,13 @@ def slack_events():
             "timestamp": iso_timestamp,
             "user_id": event.get("user", ""),
             "is_important": False,
-            "context_id": event.get("thread_ts", None)
+            "context_id": event.get("thread_ts", "")  # 空文字列で対応（NULL不可のため）
         }
 
         print("📦 Saving to Supabase with data:", data_to_save)
         save_to_supabase(data_to_save)
 
-        # @ミカさん と呼ばれたときだけ返事
+        # @ミカさん宛にメンションされたら返答
         if event.get("type") == "app_mention":
             user = event["user"]
             text = event["text"]
@@ -104,7 +110,7 @@ def slack_events():
 
     return "OK", 200
 
-# Flask起動
+# Flaskアプリ起動
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
