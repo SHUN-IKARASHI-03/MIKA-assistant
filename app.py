@@ -85,3 +85,8 @@ def slack_events():
 @app.route("/")
 def index():
     return "ミカさんは元気に稼働中です！", 200
+
+# 最後に追加（ポート指定）
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
