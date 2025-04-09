@@ -1,6 +1,7 @@
 import os
 import json
 import traceback
+import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from datetime import datetime
@@ -25,6 +26,20 @@ BOT_ID = os.getenv("BOT_ID")  # SlackのBot ID（Uで始まる）
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Slack返信用関数
+def send_slack_message(channel, message):
+    headers = {
+        "Content-type": "application/json",
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}"
+    }
+    data = {
+        "channel": channel,
+        "text": message
+    }
+    response = requests.post("https://slack.com/api/chat.postMessage", headers=headers, data=json.dumps(data))
+    if not response.ok:
+        print(f"[❌ ERROR] Failed to send message to Slack: {response.text}")
+
 @app.route("/", methods=["GET"])
 def home():
     return "ミカさん起動中（v1）", 200
@@ -38,12 +53,10 @@ def slack_events():
         if "challenge" in payload:
             return jsonify({"challenge": payload["challenge"]})
 
-        # イベントが存在しない場合は無視
         event = payload.get("event", {})
         if not event:
             return "No event in payload", 400
 
-        # Botの発言 or 無効なメッセージは除外
         if event.get("subtype") == "bot_message" or event.get("bot_id") or event.get("user") == BOT_ID:
             return "Ignored bot message", 200
 
@@ -55,7 +68,6 @@ def slack_events():
         if not user_id or not text:
             return "No user_id or text", 400
 
-        # タイムスタンプを ISO 8601 形式に変換
         try:
             timestamp = datetime.fromtimestamp(float(ts)).isoformat()
         except:
@@ -70,8 +82,20 @@ def slack_events():
         }
 
         supabase.table("messages_all").insert(data).execute()
-
         print(f"[✅ LOGGED] {user_id} @ {channel} → '{text}'")
+
+        # ChatGPT に問い合わせて返信生成
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": text}
+            ]
+        )
+        reply_text = response.choices[0].message.content.strip()
+
+        # Slack に返信
+        send_slack_message(channel, reply_text)
+        print(f"[📣 REPLIED] → {reply_text}")
 
         return "OK", 200
 
