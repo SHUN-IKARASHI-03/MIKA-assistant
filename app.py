@@ -40,6 +40,11 @@ def save_to_supabase(data):
         "context_id": data.get("context_id", None)
     }
 
+    print("📤 Sending to Supabase:", payload)  # ← ログ出力追加
+    response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=headers, json=[payload])
+    print("📥 Supabase response:", response.status_code, response.text)  # ← レスポンス内容も出力
+    return response.status_code
+
     response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=headers, json=[payload])
     print("Supabase response:", response.status_code, response.text)
     return response.status_code
