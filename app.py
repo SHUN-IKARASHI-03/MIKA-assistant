@@ -75,9 +75,9 @@ def slack_events():
         return "OK", 200
 
     except Exception as e:
-    print(f"[❌ ERROR] Exception in /slack/events: {e}")
-    traceback.print_exc()
-    return "Internal Server Error", 500
+        print(f"[❌ ERROR] Exception in /slack/events: {e}")
+        traceback.print_exc()
+        return "Internal Server Error", 500
 
 # Render用のポート起動
 if __name__ == "__main__":
