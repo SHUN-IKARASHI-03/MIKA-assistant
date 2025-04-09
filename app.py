@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 from datetime import datetime
 from supabase import create_client, Client
 from openai import OpenAI
+from datetime import datetime
+
+# 現在の日時（日本時間にしたいなら +9時間してもOK）
+now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
 # 環境変数の読み込み
 load_dotenv()
@@ -86,8 +90,9 @@ def slack_events():
 
         # ChatGPT に問い合わせて返信生成
         response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
+                {"role": "system", "content": f"あなたは社内アシスタントの美香さんです。現在の日時は {now} です。"},
                 {"role": "user", "content": text}
             ]
         )
