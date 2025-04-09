@@ -49,7 +49,7 @@ def save_to_supabase(data):
 # Slackイベント受信用エンドポイント
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
-     print("🎯 Slackイベント受信！")
+    print("🎯 Slackイベント受信！")
     # リクエストの署名検証
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
         return "Invalid request", 403
