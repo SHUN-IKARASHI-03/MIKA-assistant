@@ -5,13 +5,13 @@ from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
 from dotenv import load_dotenv
 from openai import OpenAI
+from datetime import datetime
 
 # 環境変数の読み込み
 load_dotenv()
 
 # Flaskアプリ初期化
 app = Flask(__name__)
-
 
 # APIキーやSlack認証情報の設定
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -22,7 +22,7 @@ signature_verifier = SignatureVerifier(signing_secret=os.getenv("SLACK_SIGNING_S
 # Supabaseへの保存関数
 def save_to_supabase(data):
     SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"  # ← あなたのURLに変更
-    SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaGhxb2d4bGN6bHhyZHByeWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNjQxMDgsImV4cCI6MjA1OTc0MDEwOH0.Hbb0yPOMKY3sDgWLhoJOy2QR5zCnw1ozRQCXDSd3hmA"            # ← あなたのanonキーに変更
+    SUPABASE_API_KEY = "あなたのanonキー"  # ← セキュリティ的に外部ファイル化がおすすめ
     table_name = "messages"
 
     headers = {
@@ -65,11 +65,18 @@ def slack_events():
         event = payload["event"]
         print("✅ Slack event received:", event)
 
+        # UNIX timestamp → ISO形式に変換
+        try:
+            ts_float = float(event.get("ts", ""))
+            iso_timestamp = datetime.utcfromtimestamp(ts_float).isoformat()
+        except:
+            iso_timestamp = None
+
         data_to_save = {
             "user_name": event.get("user", "unknown"),
             "text": event.get("text", ""),
             "channel_name": event.get("channel", "unknown"),
-            "timestamp": event.get("ts", ""),
+            "timestamp": iso_timestamp,
             "user_id": event.get("user", ""),
             "is_important": False,
             "context_id": event.get("thread_ts", None)
