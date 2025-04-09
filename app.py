@@ -1,4 +1,5 @@
 import os
+import requests
 from flask import Flask, request, jsonify
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
@@ -17,6 +18,33 @@ slack_token = os.getenv("SLACK_BOT_TOKEN")
 slack_client = WebClient(token=slack_token)
 signature_verifier = SignatureVerifier(signing_secret=os.getenv("SLACK_SIGNING_SECRET"))
 
+# Supabaseへの保存関数
+def save_to_supabase(data):
+    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"  # ← あなたのURLに変更
+    SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaGhxb2d4bGN6bHhyZHByeWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNjQxMDgsImV4cCI6MjA1OTc0MDEwOH0.Hbb0yPOMKY3sDgWLhoJOy2QR5zCnw1ozRQCXDSd3hmA"            # ← あなたのanonキーに変更
+    table_name = "messages"
+
+    headers = {
+        "apikey": SUPABASE_API_KEY,
+        "Authorization": f"Bearer {SUPABASE_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "user_name": data["user_name"],
+        "text": data["text"],
+        "channel_name": data["channel_name"],
+        "timestamp": data["timestamp"],
+        "user_id": data["user_id"],
+        "is_important": data.get("is_important", False),
+        "context_id": data.get("context_id", None)
+    }
+
+    response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=headers, json=[payload])
+    print("Supabase response:", response.status_code, response.text)
+    return response.status_code
+
+# Slackイベント受信エンドポイント
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     # リクエスト検証
@@ -25,19 +53,33 @@ def slack_events():
 
     payload = request.json
 
-    # Slack側のURL検証（初回用）
+    # SlackのURL検証（初回用）
     if payload.get("type") == "url_verification":
         return jsonify({"challenge": payload["challenge"]})
 
-    # イベント処理（@ミカさん）
+    # Slackイベント処理
     if "event" in payload:
         event = payload["event"]
+
+        # 🔸 Supabaseに記録
+        data_to_save = {
+            "user_name": event.get("user", "unknown"),
+            "text": event.get("text", ""),
+            "channel_name": event.get("channel", "unknown"),
+            "timestamp": event.get("ts", ""),
+            "user_id": event.get("user", ""),
+            "is_important": False,
+            "context_id": event.get("thread_ts", None)
+        }
+        save_to_supabase(data_to_save)
+
+        # 🔸 @ミカさん にメンションされた場合のみ応答
         if event.get("type") == "app_mention":
             user = event["user"]
             text = event["text"]
             channel = event["channel"]
 
-            # ChatGPTへ送信
+            # ChatGPTに送信
             chat_completion = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
