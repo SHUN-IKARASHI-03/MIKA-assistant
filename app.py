@@ -1,116 +1,87 @@
 import os
-import requests
-from flask import Flask, request, jsonify
+import json
+from flask import Flask, request
+from datetime import datetime
+from supabase import create_client, Client
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
-from dotenv import load_dotenv
-from openai import OpenAI
-from datetime import datetime
+import openai
 
-# 環境変数の読み込み
-load_dotenv()
+# 環境変数（Renderの環境設定から取得）
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Flaskアプリ初期化
+# 各種初期化
 app = Flask(__name__)
+slack_client = WebClient(token=SLACK_BOT_TOKEN)
+signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+openai.api_key = OPENAI_API_KEY
 
-# APIキーやSlack認証情報の設定
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-slack_token = os.getenv("SLACK_BOT_TOKEN")
-slack_client = WebClient(token=slack_token)
-signature_verifier = SignatureVerifier(signing_secret=os.getenv("SLACK_SIGNING_SECRET"))
-
-# Supabaseへの保存関数
-def save_to_supabase(data):
-    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"  # あなたのURL
-    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")           # .envから読み込む方式推奨
-    table_name = "messages"
-
-    headers = {
-        "apikey": SUPABASE_API_KEY,
-        "Authorization": f"Bearer {SUPABASE_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "user_name": data["user_name"],
-        "text": data["text"],
-        "channel_name": data["channel_name"],
-        "timestamp": data["timestamp"],
-        "user_id": data["user_id"],
-        "is_important": data.get("is_important", False),
-        "context_id": data.get("context_id", "")
-    }
-
-    print("📤 Sending to Supabase:", payload)
-    response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=headers, json=[payload])
-    print("📥 Supabase response:", response.status_code, response.text)
-    return response.status_code
-
-# Slackイベント受信用エンドポイント
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
-    print("🎯 Slackイベント受信！")
-
-    # リクエスト署名を検証
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
-        return "Invalid request", 403
+        return "Invalid request signature", 400
 
     payload = request.json
 
-    # Slackの初回検証用
-    if payload.get("type") == "url_verification":
-        return jsonify({"challenge": payload["challenge"]})
+    # Slackのチャレンジ検証（初回）
+    if "challenge" in payload:
+        return payload["challenge"]
 
-    # イベント処理
-    if "event" in payload:
-        event = payload["event"]
-        print("✅ Slack event received:", event)
+    event = payload.get("event", {})
 
-        # Bot自身の発言なら無視（ループ対策）
-        if "bot_id" in event:
-            return "Ignore bot message", 200
+    # メッセージイベント処理（Bot自身の発言は除外）
+    if event.get("type") == "message" and not event.get("subtype") and not event.get("bot_id"):
+        user = event.get("user", "unknown")
+        text = event.get("text", "")
+        channel = event.get("channel", "")
+        timestamp = datetime.fromtimestamp(float(event.get("ts", "0")))
 
-        # タイムスタンプをISO形式に変換
-        try:
-            ts_float = float(event.get("ts", ""))
-            iso_timestamp = datetime.utcfromtimestamp(ts_float).isoformat()
-        except:
-            iso_timestamp = None
+        # Supabaseへ全投稿を記録
+        supabase.table("messages_all").insert({
+            "user_name": user,
+            "text": text,
+            "channel": channel,
+            "timestamp": timestamp
+        }).execute()
 
-        # Supabaseに保存するデータ
-        data_to_save = {
-            "user_name": event.get("user", "unknown"),
-            "text": event.get("text", ""),
-            "channel_name": event.get("channel", "unknown"),
-            "timestamp": iso_timestamp,
-            "user_id": event.get("user", ""),
-            "is_important": False,
-            "context_id": event.get("thread_ts", "")  # 空文字列で対応（NULL不可のため）
-        }
+        print(f"[LOGGED] {user} @ {channel}: {text}")
 
-        print("📦 Saving to Supabase with data:", data_to_save)
-        save_to_supabase(data_to_save)
+        # クエスチョンメッセージに応答（記憶ベース）
+        if text.strip().endswith("？") or text.strip().endswith("?"):
+            # 過去の投稿から意味のありそうな情報を取得
+            all_logs = supabase.table("messages_all").select("text").execute()
+            past_texts = "\n".join([row["text"] for row in all_logs.data][-20:])  # 直近20件で制限
 
-        # @ミカさん宛にメンションされたら返答
-        if event.get("type") == "app_mention":
-            user = event["user"]
-            text = event["text"]
-            channel = event["channel"]
+            prompt = f"""
+            以下は社員たちの会話ログです：
+            {past_texts}
 
-            chat_completion = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "あなたは優しくて賢い社内アシスタント『ミカさん』です。"},
-                    {"role": "user", "content": text},
-                ]
-            )
+            質問：「{text}」
+            上記ログの情報を参考に、社員に親切に答えてください。
+            情報がない場合は「すみません、まだ記憶にありません」と答えてください。
+            """
+            
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "あなたは社内AI秘書のミカさんです。Slackの過去会話を参考に社員の質問に答えます。"},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                reply = response.choices[0].message.content
+                slack_client.chat_postMessage(channel=channel, text=reply)
 
-            answer = chat_completion.choices[0].message.content
-            slack_client.chat_postMessage(channel=channel, text=answer)
+            except Exception as e:
+                print(f"[ERROR] OpenAI応答エラー: {str(e)}")
 
     return "OK", 200
 
-# Flaskアプリ起動
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+@app.route("/")
+def index():
+    return "ミカさんは元気に稼働中です！", 200
