@@ -1,5 +1,6 @@
 import os
 import json
+import traceback
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from datetime import datetime
