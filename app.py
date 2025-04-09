@@ -10,7 +10,7 @@ from openai import OpenAI
 from datetime import datetime
 
 # 現在の日時（日本時間にしたいなら +9時間してもOK）
-now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+now = (datetime.utcnow() + timedelta(hours=9)).strftime("%Y-%m-%d %H:%M:%S JST")
 
 # 環境変数の読み込み
 load_dotenv()
