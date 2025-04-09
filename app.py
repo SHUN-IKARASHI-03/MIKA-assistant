@@ -21,8 +21,8 @@ signature_verifier = SignatureVerifier(signing_secret=os.getenv("SLACK_SIGNING_S
 
 # Supabaseへの保存関数
 def save_to_supabase(data):
-    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"  # ← あなたのURLに変更
-    SUPABASE_API_KEY = "あなたのanonキー"  # ← セキュリティ的に外部ファイル化がおすすめ
+    SUPABASE_URL = "https://cqhhqogxlczlxrdpryas.supabase.co"
+    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
     table_name = "messages"
 
     headers = {
