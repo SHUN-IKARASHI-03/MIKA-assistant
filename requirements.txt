@@ -3,3 +3,4 @@ openai
 python-dotenv
 slack_sdk
 requests
+supabase
